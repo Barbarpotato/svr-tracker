@@ -376,6 +376,99 @@ app.get('/download-csv', async (req, res) => {
 });
 
 
+app.get('/strava', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split("T")[0]; // Ambil tanggal hari ini
+
+        // Fetch all athlete pages concurrently
+        const athleteResponses = await Promise.allSettled(
+            data.map(athlete =>
+                fetch(athlete.strava_url)
+                    .then(res => res.text())
+                    .then(pageData => {
+                        const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+                        if (!match) return null;
+                        return { athlete, jsonData: JSON.parse(match[1].trim()) };
+                    })
+                    .catch(error => {
+                        console.error(`Error fetching ${athlete.name}:`, error);
+                        return null;
+                    })
+            )
+        );
+
+        // Filter successful responses and extract relevant activities
+        const activities = athleteResponses
+            .filter(result => result.status === 'fulfilled' && result.value)
+            .flatMap(({ value }) => {
+                const { athlete, jsonData } = value;
+                const athleteData = jsonData.props.pageProps.athleteData;
+                return (athleteData.recentActivities || [])
+                    .filter(activity => activity.startDateLocal === "Today")
+                    .map(activity => ({
+                        name: athlete.name,
+                        distance: activity.distance,
+                        elevation: activity.elevation,
+                        moving_time: activity.movingTime,
+                        type: activity.type,
+                        link: `https://www.strava.com/activities/${activity.id}`
+                    }));
+            });
+
+        // Fetch all activity detail pages concurrently
+        const activityResponses = await Promise.allSettled(
+            activities.map(activity =>
+                fetch(activity.link)
+                    .then(res => res.text())
+                    .then(pageData => {
+                        const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+                        if (!match) return null;
+                        const jsonData = JSON.parse(match[1].trim());
+                        const activityData = jsonData.props.pageProps.activity;
+                        if (!activityData) return null;
+
+                        // Ambil tanggal dari `startLocal`
+                        const matchDate = activityData.startLocal.match(/^(\d{4}-\d{2}-\d{2})/);
+                        const detail_date = matchDate ? matchDate[1] : null;
+
+                        if (detail_date === today) {
+                            return {
+                                name: activity.name,
+                                distance: (activityData.scalars.distance / 1000).toFixed(2), // Convert to km
+                                elevation: activity.elevation,
+                                moving_time: activity.moving_time,
+                                type: activity.type,
+                                link: activity.link
+                            };
+                        }
+                        return null;
+                    })
+                    .catch(error => {
+                        console.error(`Error fetching details for ${activity.name}:`, error);
+                        return null;
+                    })
+            )
+        );
+
+        // Filter hanya hasil yang sukses
+        const real_activity = activityResponses
+            .filter(result => result.status === 'fulfilled' && result.value)
+            .map(({ value }) => value);
+
+        // Convert to CSV
+        const csv = parse(real_activity);
+
+        // Set CSV headers for download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
+        res.status(200).send(csv);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error fetching data');
+    }
+});
+
+
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
 });
