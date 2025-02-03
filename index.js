@@ -436,7 +436,6 @@ app.get('/strava', async (req, res) => {
 
                         if (detail_date === today) {
                             return {
-                                today,
                                 detail_date,
                                 name: activity.name,
                                 distance: (activityData.scalars.distance / 1000).toFixed(2), // Convert to km
