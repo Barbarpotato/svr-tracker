@@ -383,32 +383,25 @@ app.get('/download-csv', async (req, res) => {
 
 app.get('/strava', async (req, res) => {
     try {
-        const today = new Date().toISOString().split("T")[0]; // Ambil tanggal hari ini
+        const today = new Date().toISOString().split("T")[0]; // Get today's date
 
         // Fetch all athlete pages concurrently
-        const athleteResponses = await Promise.allSettled(
+        const athleteResponses = await Promise.all(
             data.map(athlete =>
                 fetch(athlete.strava_url)
                     .then(res => res.text())
                     .then(pageData => {
                         const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
-                        if (!match) return null;
+                        if (!match) throw new Error(`No script tag found for ${athlete.name}`);
                         return { athlete, jsonData: JSON.parse(match[1].trim()) };
-                    })
-                    .catch(error => {
-                        console.error(`Error fetching ${athlete.name}:`, error);
-                        return null;
                     })
             )
         );
 
         // Filter successful responses and extract relevant activities
         const activities = athleteResponses
-            .filter(result => result.status === 'fulfilled' && result.value)
-            .flatMap(({ value }) => {
-                const { athlete, jsonData } = value;
+            .flatMap(({ athlete, jsonData }) => {
                 const athleteData = jsonData.props.pageProps.athleteData;
-
                 let date = new Date();
                 date.setDate(date.getDate() + 1);
                 date = format(date, "MMMM d, yyyy");
@@ -426,18 +419,18 @@ app.get('/strava', async (req, res) => {
             });
 
         // Fetch all activity detail pages concurrently
-        const activityResponses = await Promise.allSettled(
+        const activityResponses = await Promise.all(
             activities.map(activity =>
                 fetch(activity.link)
                     .then(res => res.text())
                     .then(pageData => {
                         const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
-                        if (!match) return null;
+                        if (!match) throw new Error(`No script tag found for activity ${activity.link}`);
                         const jsonData = JSON.parse(match[1].trim());
                         const activityData = jsonData.props.pageProps.activity;
                         if (!activityData) return null;
 
-                        // Ambil tanggal dari `startLocal`
+                        // Get date from `startLocal`
                         const matchDate = activityData.startLocal.match(/^(\d{4}-\d{2}-\d{2})/);
                         const detail_date = matchDate ? matchDate[1] : null;
 
@@ -453,24 +446,18 @@ app.get('/strava', async (req, res) => {
                         }
                         return null;
                     })
-                    .catch(error => {
-                        console.error(`Error fetching details for ${activity.name}:`, error);
-                        return null;
-                    })
             )
         );
 
-        // Filter hanya hasil yang sukses
-        const real_activity = activityResponses
-            .filter(result => result.status === 'fulfilled' && result.value)
-            .map(({ value }) => value);
+        // Filter successful activity results
+        const real_activity = activityResponses.filter(result => result !== null);
 
         // Convert to CSV
         const csv = parse(real_activity);
 
         // Set CSV headers for download
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
+        res.setHeader('Content-Disposition', 'attachment; filename="SVR-5.csv"');
         res.status(200).send(csv);
     } catch (err) {
         console.error(err);
