@@ -1,6 +1,7 @@
 // Core
 import express from 'express';
 import { parse } from 'json2csv';
+import { format } from "date-fns";
 import dotenv from 'dotenv';
 
 // Setup App
@@ -336,8 +337,12 @@ app.get('/download-csv', async (req, res) => {
                     const jsonData = JSON.parse(match[1].trim());
                     const athleteData = jsonData.props.pageProps.athleteData;
 
+                    let date = new Date();
+                    date.setDate(date.getDate() + 1);
+                    date = format(date, "MMMM d, yyyy");
+
                     // Filter activities for today
-                    const filteredActivities = athleteData.recentActivities?.filter(activity => activity.startDateLocal === "Today");
+                    const filteredActivities = athleteData.recentActivities?.filter(activity => activity.startDateLocal === "Today" || activity.startDateLocal === date);
 
                     // Add additional properties to filtered activities
                     if (filteredActivities?.length) {
@@ -403,8 +408,13 @@ app.get('/strava', async (req, res) => {
             .flatMap(({ value }) => {
                 const { athlete, jsonData } = value;
                 const athleteData = jsonData.props.pageProps.athleteData;
+
+                let date = new Date();
+                date.setDate(date.getDate() + 1);
+                date = format(date, "MMMM d, yyyy");
+
                 return (athleteData.recentActivities || [])
-                    .filter(activity => activity.startDateLocal === "Today")
+                    .filter(activity => activity.startDateLocal === "Today" || activity.startDateLocal === date)
                     .map(activity => ({
                         name: athlete.name,
                         distance: activity.distance,
