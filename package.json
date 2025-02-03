@@ -1,0 +1,26 @@
+{
+  "name": "svr-tracker",
+  "version": "1.0.0",
+  "description": "SVR Tracker",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node --watch index.js "
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Barbarpotato/svr-tracker.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Barbarpotato/svr-tracker/issues"
+  },
+  "homepage": "https://github.com/Barbarpotato/svr-tracker#readme",
+  "dependencies": {
+    "express": "^4.21.2",
+    "json2csv": "^6.0.0-alpha.2",
+    "dotenv": "^16.3.1"
+  }
+}
