@@ -20,6 +20,7 @@
   "homepage": "https://github.com/Barbarpotato/svr-tracker#readme",
   "dependencies": {
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
     "json2csv": "^6.0.0-alpha.2"

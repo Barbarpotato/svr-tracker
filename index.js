@@ -383,7 +383,7 @@ app.get('/download-csv', async (req, res) => {
 
 app.get('/strava', async (req, res) => {
     try {
-        const today = new Date().toISOString().split("T")[0]; // Get today's date
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
 
         // Fetch all athlete pages concurrently
         const athleteResponses = await Promise.all(
@@ -436,6 +436,8 @@ app.get('/strava', async (req, res) => {
 
                         if (detail_date === today) {
                             return {
+                                today,
+                                detail_date,
                                 name: activity.name,
                                 distance: (activityData.scalars.distance / 1000).toFixed(2), // Convert to km
                                 elevation: activity.elevation,
