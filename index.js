@@ -438,7 +438,7 @@ app.get('/strava', async (req, res) => {
                             return {
                                 detail_date,
                                 name: activity.name,
-                                distance: (activityData.scalars.distance / 1000).toFixed(2), // Convert to km
+                                distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)), // Convert to km and format with comma
                                 elevation: activity.elevation,
                                 moving_time: activity.moving_time,
                                 type: activity.type,
