@@ -409,6 +409,7 @@ app.get('/strava', async (req, res) => {
                 return (athleteData.recentActivities || [])
                     .filter(activity => activity.startDateLocal === "Today" || activity.startDateLocal === date)
                     .map(activity => ({
+                        date: activity.startDateLocal,
                         name: athlete.name,
                         distance: activity.distance,
                         elevation: activity.elevation,
@@ -434,23 +435,20 @@ app.get('/strava', async (req, res) => {
                         const matchDate = activityData.startLocal.match(/^(\d{4}-\d{2}-\d{2})/);
                         const detail_date = matchDate ? matchDate[1] : null;
 
-                        if (detail_date === today) {
-                            return {
-                                detail_date,
-                                name: activity.name,
-                                distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)), // Convert to km and format with comma
-                                elevation: activity.elevation,
-                                moving_time: activity.moving_time,
-                                type: activity.type,
-                                link: activity.link
-                            };
-                        }
-                        return null;
+                        return {
+                            date: detail_date,
+                            name: activity.name,
+                            distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)), // Convert to km and format with comma
+                            elevation: activity.elevation,
+                            moving_time: activity.moving_time,
+                            type: activity.type,
+                            link: activity.link
+                        };
                     })
             )
         );
 
-        // Filter successful activity results
+        // // Filter successful activity results
         const real_activity = activityResponses.filter(result => result !== null);
 
         // Convert to CSV
