@@ -1,8 +1,10 @@
 // Core
 import express from 'express';
 import { parse } from 'json2csv';
-import { format } from "date-fns";
+import { format } from 'date-fns';
+import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
+
 
 // Setup App
 const app = express();
@@ -398,28 +400,27 @@ app.get('/strava', async (req, res) => {
             )
         );
 
-        // Filter successful responses and extract relevant activities
-        const activities = athleteResponses
-            .flatMap(({ athlete, jsonData }) => {
-                const athleteData = jsonData.props.pageProps.athleteData;
-                let date = new Date();
-                date.setDate(date.getDate() + 1);
-                date = format(date, "MMMM d, yyyy");
+        // Extract today's or tomorrow's activities
+        const activities = athleteResponses.flatMap(({ athlete, jsonData }) => {
+            const athleteData = jsonData.props.pageProps.athleteData;
+            let date = new Date();
+            date.setDate(date.getDate() + 1);
+            const tomorrow = format(date, 'MMMM d, yyyy');
 
-                return (athleteData.recentActivities || [])
-                    .filter(activity => activity.startDateLocal === "Today" || activity.startDateLocal === date)
-                    .map(activity => ({
-                        date: activity.startDateLocal,
-                        name: athlete.name,
-                        distance: activity.distance,
-                        elevation: activity.elevation,
-                        moving_time: activity.movingTime,
-                        type: activity.type,
-                        link: `https://www.strava.com/activities/${activity.id}`
-                    }));
-            });
+            return (athleteData.recentActivities || [])
+                .filter(activity => activity.startDateLocal === 'Today' || activity.startDateLocal === tomorrow)
+                .map(activity => ({
+                    date: activity.startDateLocal,
+                    name: athlete.name,
+                    distance: activity.distance,
+                    elevation: activity.elevation,
+                    moving_time: activity.movingTime,
+                    type: activity.type,
+                    link: `https://www.strava.com/activities/${activity.id}`
+                }));
+        });
 
-        // Fetch all activity detail pages concurrently
+        // Fetch and extract detail + images from activity pages
         const activityResponses = await Promise.all(
             activities.map(activity =>
                 fetch(activity.link)
@@ -427,34 +428,41 @@ app.get('/strava', async (req, res) => {
                     .then(pageData => {
                         const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
                         if (!match) throw new Error(`No script tag found for activity ${activity.link}`);
+
                         const jsonData = JSON.parse(match[1].trim());
                         const activityData = jsonData.props.pageProps.activity;
                         if (!activityData) return null;
 
-                        // Get date from `startLocal`
+                        // Extract images using Cheerio
+                        const $ = cheerio.load(pageData);
+                        const images = [];
+                        $('.styles_photosList__FqTvR img').each((_, el) => {
+                            const src = $(el).attr('src');
+                            if (src) images.push(src);
+                        });
+
                         const matchDate = activityData.startLocal.match(/^(\d{4}-\d{2}-\d{2})/);
                         const detail_date = matchDate ? matchDate[1] : null;
 
                         return {
                             date: detail_date,
                             name: activity.name,
-                            distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)), // Convert to km and format with comma
+                            distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)),
                             elevation: activity.elevation,
                             moving_time: activity.moving_time,
                             type: activity.type,
-                            link: activity.link
+                            link: activity.link,
+                            images: images.join(', ')
                         };
                     })
             )
         );
 
-        // // Filter successful activity results
         const real_activity = activityResponses.filter(result => result !== null);
 
         // Convert to CSV
         const csv = parse(real_activity);
 
-        // Set CSV headers for download
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="SVR-5.csv"');
         res.status(200).send(csv);
@@ -463,7 +471,6 @@ app.get('/strava', async (req, res) => {
         res.status(500).send('Error fetching data');
     }
 });
-
 
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
