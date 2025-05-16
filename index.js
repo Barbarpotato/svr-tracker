@@ -436,8 +436,8 @@ app.get('/strava', async (req, res) => {
                         // Extract images using Cheerio
                         const $ = cheerio.load(pageData);
                         const images = [];
-                        $('.styles_photosList__FqTvR img').each((_, el) => {
-                            const src = $(el).attr('src');
+                        $('button[data-cy="photo"]').each((_, el) => {
+                            const src = $(el).find('img').attr('src');
                             if (src) images.push(src);
                         });
 
@@ -471,6 +471,7 @@ app.get('/strava', async (req, res) => {
         res.status(500).send('Error fetching data');
     }
 });
+
 
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
