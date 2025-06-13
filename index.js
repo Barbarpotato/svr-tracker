@@ -217,6 +217,10 @@ const data = [
         "strava_url": "https://www.strava.com/athletes/156646250"
     },
     {
+        "name": "Musfira",
+        "strava_url": "https://www.strava.com/athletes/168456004"
+    },
+    {
         "name": "Mustabsyirah",
         "strava_url": "https://www.strava.com/athletes/112850204"
     },
