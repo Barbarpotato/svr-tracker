@@ -623,6 +623,10 @@ app.get('/read-csv', (req, res) => {
                     // Cleaning and transforming distance to a number
                     if (row.distance && typeof row.distance === 'string') {
                         row.distance = parseFloat(row.distance.replace(',', '.'));
+                        // Cap distance at 15 km
+                        if (row.distance > 15) {
+                            row.distance = 15;
+                        }
                     }
                     results.push(row);
                 }
@@ -673,7 +677,6 @@ app.get('/read-csv', (req, res) => {
             });
     });
 });
-
 
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
