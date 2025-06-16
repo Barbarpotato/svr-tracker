@@ -384,7 +384,6 @@ const groupMember = {
         "105095022",
         "104676234",
         "168456004", // Musfira
-        "156646250", // Musfira
         "112849019"
     ],
     "The Rising Star": [
@@ -595,6 +594,7 @@ app.get('/strava', async (req, res) => {
     }
 });
 
+
 app.get('/read-csv', (req, res) => {
     const date = req.query.date; // Get date from query parameter
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -618,11 +618,14 @@ app.get('/read-csv', (req, res) => {
         response
             .pipe(csv())
             .on('data', (row) => {
-                // Cleaning and transforming distance to a number
-                if (row.distance && typeof row.distance === 'string') {
-                    row.distance = parseFloat(row.distance.replace(',', '.'));
+                // Validate CSV date field
+                if (row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.date === date) {
+                    // Cleaning and transforming distance to a number
+                    if (row.distance && typeof row.distance === 'string') {
+                        row.distance = parseFloat(row.distance.replace(',', '.'));
+                    }
+                    results.push(row);
                 }
-                results.push(row);
             })
             .on('end', () => {
                 // Aggregating distances by group
@@ -670,6 +673,7 @@ app.get('/read-csv', (req, res) => {
             });
     });
 });
+
 
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
