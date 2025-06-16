@@ -20,6 +20,7 @@
   "homepage": "https://github.com/Barbarpotato/svr-tracker#readme",
   "dependencies": {
     "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",

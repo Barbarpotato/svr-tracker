@@ -6,12 +6,19 @@ import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
 import https from 'https';
 import csv from 'csv-parser';
-import { id } from 'date-fns/locale';
+import cors from 'cors';
 
 
 // Setup App
 const app = express();
 dotenv.config();
+
+// Enable CORS for specific origin
+app.use(cors({
+    origin: 'https://itstaging.samamajuprima.co.id',
+    methods: ['GET'],
+    allowedHeaders: ['Content-Type']
+}));
 
 
 const data = [
