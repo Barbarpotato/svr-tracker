@@ -589,8 +589,13 @@ app.get('/strava', async (req, res) => {
 });
 
 app.get('/read-csv', (req, res) => {
+    const date = req.query.date; // Get date from query parameter
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Invalid or missing date parameter. Use format YYYY-MM-DD' });
+    }
+    const csvUrl = `https://itstaging.samamajuprima.co.id/SVR_${date}.csv`;
+
     const results = [];
-    const csvUrl = 'https://itstaging.samamajuprima.co.id/SVR_2025-06-16.csv';
 
     // Creating a map of athlete names to their IDs and names for lookup
     const athleteIdMap = data.reduce((map, athlete) => {
