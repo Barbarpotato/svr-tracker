@@ -588,24 +588,76 @@ app.get('/strava', async (req, res) => {
     }
 });
 
-
 app.get('/read-csv', (req, res) => {
     const results = [];
     const csvUrl = 'https://itstaging.samamajuprima.co.id/SVR_2025-06-16.csv';
 
+    // Creating a map of athlete names to their IDs and names for lookup
+    const athleteIdMap = data.reduce((map, athlete) => {
+        map[athlete.name.toLowerCase()] = {
+            id: athlete.strava_url.split('/').pop(),
+            name: athlete.name
+        };
+        return map;
+    }, {});
+
+    // Fetching and parsing CSV
     https.get(csvUrl, (response) => {
         response
             .pipe(csv())
-            .on('data', (row) => results.push(row))
+            .on('data', (row) => {
+                // Cleaning and transforming distance to a number
+                if (row.distance && typeof row.distance === 'string') {
+                    row.distance = parseFloat(row.distance.replace(',', '.'));
+                }
+                results.push(row);
+            })
             .on('end', () => {
-                res.json(results);
+                // Aggregating distances by group
+                const groupStats = Object.keys(groupMember).map(group => {
+                    const memberIds = groupMember[group];
+                    const memberCount = memberIds.length;
+
+                    // Collecting member details
+                    const members = memberIds.map(id => {
+                        const athlete = data.find(a => a.strava_url.endsWith(id));
+                        const name = athlete ? athlete.name : 'Unknown';
+                        const activity = results.find(row => {
+                            const athleteInfo = athleteIdMap[row.name.toLowerCase()];
+                            return athleteInfo && athleteInfo.id === id;
+                        });
+                        const distance = activity && !isNaN(activity.distance) ? activity.distance.toFixed(2) : '0.00';
+                        return { name, distance };
+                    });
+
+                    // Summing distances
+                    const totalDistance = members.reduce((sum, member) => {
+                        return sum + parseFloat(member.distance);
+                    }, 0);
+
+                    // Calculating average distance
+                    const averageDistance = memberCount > 0 ? (totalDistance / memberCount).toFixed(2) : '0.00';
+
+                    return {
+                        group,
+                        totalDistance: totalDistance.toFixed(2),
+                        memberCount,
+                        averageDistance,
+                        members
+                    };
+                });
+
+                // Sorting groups by average distance in descending order
+                groupStats.sort((a, b) => b.averageDistance - a.averageDistance);
+
+                res.json(groupStats);
+            })
+            .on('error', (err) => {
+                console.error('CSV download error:', err.message);
+                res.status(500).json({ error: 'Failed to fetch CSV file' });
             });
-    }).on('error', (err) => {
-        console.error('CSV download error:', err.message);
-        res.status(500).json({ error: 'Failed to fetch CSV file' });
     });
 });
-
 
 app.listen(3000, () => {
     console.log(`HELLO SVR! Your API is running on port 3000`);
