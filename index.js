@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
 import https from 'https';
 import csv from 'csv-parser';
+import { id } from 'date-fns/locale';
 
 
 // Setup App
@@ -523,6 +524,7 @@ app.get('/strava', async (req, res) => {
             return (athleteData.recentActivities || [])
                 .filter(activity => activity.startDateLocal === 'Today' || activity.startDateLocal === tomorrow)
                 .map(activity => ({
+                    id: activity.id,
                     date: activity.startDateLocal,
                     name: athlete.name,
                     distance: activity.distance,
