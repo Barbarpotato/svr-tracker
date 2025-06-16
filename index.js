@@ -515,10 +515,15 @@ app.get('/strava', async (req, res) => {
                     .then(pageData => {
                         const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
                         if (!match) throw new Error(`No script tag found for ${athlete.name}`);
+
+                        console.log(match[1]); return;
+
                         return { athlete, jsonData: JSON.parse(match[1].trim()) };
                     })
             )
         );
+
+        console.log(athleteResponses);
 
         // Extract today's or tomorrow's activities
         const activities = athleteResponses.flatMap(({ athlete, jsonData }) => {
@@ -543,6 +548,9 @@ app.get('/strava', async (req, res) => {
                     link: `https://www.strava.com/activities/${activity.id}`
                 }));
         });
+
+        // console.log(activities);
+
 
         // Fetch and extract detail + images from activity pages
         const activityResponses = await Promise.all(
@@ -598,7 +606,6 @@ app.get('/strava', async (req, res) => {
     }
 });
 
-
 app.get('/read-csv', (req, res) => {
     const date = req.query.date; // Get date from query parameter
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -622,12 +629,21 @@ app.get('/read-csv', (req, res) => {
         response
             .pipe(csv())
             .on('data', (row) => {
-                // Validate CSV date field
-                if (row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.date === date) {
+                // Validate and reformat CSV date field (e.g., 16/06/2025 to 2025-06-16)
+                let rowDate = row.date;
+                if (rowDate && rowDate.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                    const [day, month, year] = rowDate.split('/');
+                    rowDate = `${year}-${month}-${day}`;
+                }
+                if (rowDate && /^\d{4}-\d{2}-\d{2}$/.test(rowDate) && rowDate === date) {
                     // Cleaning and transforming distance to a number
                     if (row.distance && typeof row.distance === 'string') {
                         row.distance = parseFloat(row.distance.replace(',', '.'));
-                        // Cap distance at 15 km
+                        // Exclude rows with distance ≤ 3 km
+                        if (row.distance <= 3) {
+                            return;
+                        }
+                        // Cap distance at 15 km for rows > 15 km
                         if (row.distance > 15) {
                             row.distance = 15;
                         }
@@ -636,6 +652,30 @@ app.get('/read-csv', (req, res) => {
                 }
             })
             .on('end', () => {
+                // Aggregate distances by athlete name
+                const aggregatedResults = {};
+                results.forEach(row => {
+                    const name = row.name.toLowerCase();
+                    if (!aggregatedResults[name]) {
+                        aggregatedResults[name] = {
+                            name: row.name,
+                            id: athleteIdMap[name]?.id,
+                            distance: 0
+                        };
+                    }
+                    aggregatedResults[name].distance += row.distance || 0;
+                });
+
+                // Apply 15 km cap to aggregated distance
+                Object.values(aggregatedResults).forEach(athlete => {
+                    if (athlete.distance > 15) {
+                        athlete.distance = 15;
+                    }
+                });
+
+                // Convert aggregated results to array
+                const aggregatedArray = Object.values(aggregatedResults);
+
                 // Aggregating distances by group
                 const groupStats = Object.keys(groupMember).map(group => {
                     const memberIds = groupMember[group];
@@ -645,7 +685,7 @@ app.get('/read-csv', (req, res) => {
                     const members = memberIds.map(id => {
                         const athlete = data.find(a => a.strava_url.endsWith(id));
                         const name = athlete ? athlete.name : 'Unknown';
-                        const activity = results.find(row => {
+                        const activity = aggregatedArray.find(row => {
                             const athleteInfo = athleteIdMap[row.name.toLowerCase()];
                             return athleteInfo && athleteInfo.id === id;
                         });
