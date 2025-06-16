@@ -4,6 +4,8 @@ import { parse } from 'json2csv';
 import { format } from 'date-fns';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
+import https from 'https';
+import csv from 'csv-parser';
 
 
 // Setup App
@@ -327,6 +329,113 @@ const data = [
 ]
 
 
+const groupMember = {
+    "BEYOND LIMITS": [
+        "106397289", // andi alfa
+        "156395267", // Neli,
+        "156412556", //Filly Juliet,
+        "147973538", // Rio
+    ],
+    "MAUNG": [
+        "112850698",
+        "133006873",
+        "127229834",
+        "156651628"
+    ],
+    "SuHu": [
+        "131686008",
+        "112850204",
+        "137990204",
+        "156310816"
+    ],
+    "KOPI": [
+        "50725657",
+        "104704718",
+        "131080559",
+        "104704146"
+    ],
+    "Satgas Lari": [
+        "156440955",
+        "104782290",
+        "131571848",
+        "106400926"
+    ],
+    "The Munazt": [
+        "104777566",
+        "106128990",
+        "156299639",
+        "131083157"
+    ],
+    "PS (Pelari Santai)": [
+        "104704203",
+        "104142305",
+        "106084694",
+        "106105959"
+    ],
+    "Tupao Terbang": [
+        "105095022",
+        "104676234",
+        "168456004", // Musfira
+        "156646250", // Musfira
+        "112849019"
+    ],
+    "The Rising Star": [
+        "106142836",
+        "131082755",
+        "106396953",
+        "156382528"
+    ],
+    "Kanvas Lari": [
+        "131082566",
+        "106141823",
+        "156646455",
+        "104142273"
+    ],
+    "Teman Lari Sore": [
+        "156326553",
+        "156379904",
+        "156294430",
+        "106096757"
+    ],
+    "Lari Sprint": [
+        "104977078",
+        "156293045",
+        "121860615",
+        "156326813",
+        "137818829"
+    ],
+    "VMA3": [
+        "156363541",
+        "104703436",
+        "112851876",
+        "156632283",
+        "104977227"
+    ],
+    "Lari Kalo Ingat": [
+        "112851267",
+        "156753906",
+        "156308038",
+        "106130235",
+        "119635674"
+    ],
+    "Anti Lari Kosong": [
+        "156293701",
+        "156319990",
+        "106134283",
+        "112848672",
+        "106130604"
+    ],
+    "Grup Lari Gak Jelas": [
+        "104781990",
+        "128848631",
+        "104703458",
+        "138877033",
+        "131046514"
+    ]
+}
+
+
+
 app.get('/download-csv', async (req, res) => {
     try {
         const activities = []; // Store activities
@@ -449,6 +558,7 @@ app.get('/strava', async (req, res) => {
                         const detail_date = matchDate ? matchDate[1] : null;
 
                         return {
+                            id: activity.id,
                             date: detail_date,
                             name: activity.name,
                             distance: new Intl.NumberFormat('de-DE').format((activityData.scalars.distance / 1000).toFixed(2)),
@@ -474,6 +584,24 @@ app.get('/strava', async (req, res) => {
         console.error(err);
         res.status(500).send('Error fetching data');
     }
+});
+
+
+app.get('/read-csv', (req, res) => {
+    const results = [];
+    const csvUrl = 'https://itstaging.samamajuprima.co.id/SVR_2025-06-16.csv';
+
+    https.get(csvUrl, (response) => {
+        response
+            .pipe(csv())
+            .on('data', (row) => results.push(row))
+            .on('end', () => {
+                res.json(results);
+            });
+    }).on('error', (err) => {
+        console.error('CSV download error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch CSV file' });
+    });
 });
 
 
