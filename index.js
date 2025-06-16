@@ -506,6 +506,7 @@ app.get('/download-csv', async (req, res) => {
 app.get('/strava', async (req, res) => {
     try {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
+        const csvUrl = `https://itstaging.samamajuprima.co.id/SVR_${today}.csv`;
 
         // Fetch all athlete pages concurrently
         const athleteResponses = await Promise.all(
@@ -515,15 +516,10 @@ app.get('/strava', async (req, res) => {
                     .then(pageData => {
                         const match = pageData.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
                         if (!match) throw new Error(`No script tag found for ${athlete.name}`);
-
-                        console.log(match[1]); return;
-
                         return { athlete, jsonData: JSON.parse(match[1].trim()) };
                     })
             )
         );
-
-        console.log(athleteResponses);
 
         // Extract today's or tomorrow's activities
         const activities = athleteResponses.flatMap(({ athlete, jsonData }) => {
@@ -548,9 +544,6 @@ app.get('/strava', async (req, res) => {
                     link: `https://www.strava.com/activities/${activity.id}`
                 }));
         });
-
-        // console.log(activities);
-
 
         // Fetch and extract detail + images from activity pages
         const activityResponses = await Promise.all(
@@ -594,17 +587,117 @@ app.get('/strava', async (req, res) => {
 
         const real_activity = activityResponses.filter(result => result !== null);
 
-        // Convert to CSV
+        // Fetch existing CSV from itstaging server
+        let existingActivities = [];
+        try {
+            const response = await new Promise((resolve, reject) => {
+                https.get(csvUrl, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => resolve({ status: res.statusCode, data }));
+                    res.on('error', reject);
+                }).on('error', () => resolve({ status: 404, data: '' })); // Handle 404 as non-existent file
+            });
+
+            if (response.status === 200 && response.data) {
+                // Parse existing CSV
+                await new Promise((resolve, reject) => {
+                    const stream = require('stream');
+                    const bufferStream = new stream.PassThrough();
+                    bufferStream.end(response.data);
+                    bufferStream
+                        .pipe(csv())
+                        .on('data', (row) => {
+                            existingActivities.push({
+                                activity_id: row.activity_id,
+                                id: row.id,
+                                date: row.date,
+                                name: row.name,
+                                distance: row.distance,
+                                elevation: row.elevation,
+                                moving_time: row.moving_time,
+                                type: row.type,
+                                link: row.link,
+                                images: row.images
+                            });
+                        })
+                        .on('end', resolve)
+                        .on('error', reject);
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching existing CSV:', err.message);
+            // Proceed with empty existingActivities if fetch fails
+        }
+
+        // Merge new activities with existing ones for server-side update
+        const activityMap = new Map();
+
+        // Add existing activities to map
+        existingActivities.forEach(activity => {
+            activityMap.set(activity.activity_id, activity);
+        });
+
+        // Update or append new activities
+        real_activity.forEach(activity => {
+            activityMap.set(activity.activity_id, activity);
+        });
+
+        // Convert map to array for server-side CSV
+        const mergedActivities = Array.from(activityMap.values());
+
+        // Convert merged activities to CSV for server upload
+        const mergedCsv = parse(mergedActivities, {
+            fields: ['activity_id', 'id', 'date', 'name', 'distance', 'elevation', 'moving_time', 'type', 'link', 'images']
+        });
+
+        // Upload merged CSV to itstaging server (placeholder for PUT request)
+        try {
+            await new Promise((resolve, reject) => {
+                const req = https.request(
+                    {
+                        method: 'PUT',
+                        hostname: 'itstaging.samamajuprima.co.id',
+                        path: `/SVR_${today}.csv`,
+                        headers: {
+                            'Content-Type': 'text/csv',
+                            'Content-Length': Buffer.byteLength(mergedCsv)
+                        }
+                    },
+                    (res) => {
+                        let data = '';
+                        res.on('data', chunk => data += chunk);
+                        res.on('end', () => {
+                            if (res.statusCode >= 200 && res.statusCode < 300) {
+                                resolve();
+                            } else {
+                                reject(new Error(`Failed to upload CSV: ${res.statusCode} ${data}`));
+                            }
+                        });
+                    }
+                );
+                req.on('error', reject);
+                req.write(mergedCsv);
+                req.end();
+            });
+        } catch (err) {
+            console.error('Error uploading CSV:', err.message);
+            // Proceed to send client response even if upload fails
+        }
+
+        // Convert new activities to CSV for client response
         const csv = parse(real_activity);
 
+        // Send new activities as CSV to client
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="SVR-5.csv"');
+        res.setHeader('Content-Disposition', `attachment; filename="SVR_${today}.csv"`);
         res.status(200).send(csv);
     } catch (err) {
         console.error(err);
         res.status(500).send('Error fetching data');
     }
 });
+
 
 app.get('/read-csv', (req, res) => {
     const date = req.query.date; // Get date from query parameter
