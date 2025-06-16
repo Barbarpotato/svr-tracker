@@ -527,10 +527,13 @@ app.get('/strava', async (req, res) => {
             date.setDate(date.getDate() + 1);
             const tomorrow = format(date, 'MMMM d, yyyy');
 
+            const athleteid = athleteData.athlete.id;
+
             return (athleteData.recentActivities || [])
                 .filter(activity => activity.startDateLocal === 'Today' || activity.startDateLocal === tomorrow)
                 .map(activity => ({
-                    id: activity.id,
+                    id: athleteid,
+                    activity_id: activity.id,
                     date: activity.startDateLocal,
                     name: athlete.name,
                     distance: activity.distance,
@@ -566,6 +569,7 @@ app.get('/strava', async (req, res) => {
                         const detail_date = matchDate ? matchDate[1] : null;
 
                         return {
+                            activity_id: activity.activity_id,
                             id: activity.id,
                             date: detail_date,
                             name: activity.name,
