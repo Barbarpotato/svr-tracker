@@ -380,7 +380,7 @@ const groupMember = {
         "106084694",
         "106105959"
     ],
-    "Tupao Terbang": [
+    "Tupai Terbang": [
         "105095022",
         "104676234",
         "168456004", // Musfira
