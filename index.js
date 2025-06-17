@@ -812,53 +812,59 @@ app.get('/strava', async (req, res) => {
         try {
             const response = await fetch(csvUrl);
             if (response.status !== 200) {
-                throw new Error(`Failed to fetch CSV: HTTP status ${response.status}`);
-            }
-            const text = await response.text();
-            if (!text) {
-                throw new Error('CSV file is empty');
-            }
-            // Parse existing CSV
-            await new Promise((resolve, reject) => {
-                const bufferStream = Readable.from(text);
-                bufferStream
-                    .pipe(csvParser())
-                    .on('data', (row) => {
-                        existingActivities.push({
-                            activity_id: row.activity_id,
-                            id: row.id,
-                            date: row.date,
-                            name: row.name,
-                            distance: row.distance,
-                            elevation: row.elevation,
-                            moving_time: row.moving_time,
-                            type: row.type,
-                            link: row.link,
-                            images: row.images
-                        });
-                    })
-                    .on('end', resolve)
-                    .on('error', err => {
-                        console.error('CSV parsing error:', err.message);
-                        reject(new Error(`Failed to parse CSV: ${err.message}`));
+                console.log(`CSV not found for ${today}, creating new file`);
+                // Jika CSV tidak ada, lanjutkan dengan array kosong
+            } else {
+                const text = await response.text();
+                if (!text) {
+                    console.log(`CSV for ${today} is empty`);
+                } else {
+                    // Parse existing CSV
+                    await new Promise((resolve, reject) => {
+                        const bufferStream = Readable.from(text);
+                        bufferStream
+                            .pipe(csvParser())
+                            .on('data', (row) => {
+                                existingActivities.push({
+                                    activity_id: row.activity_id,
+                                    id: row.id,
+                                    date: row.date,
+                                    name: row.name,
+                                    distance: row.distance,
+                                    elevation: row.elevation,
+                                    moving_time: row.moving_time,
+                                    type: row.type,
+                                    link: row.link,
+                                    images: row.images
+                                });
+                            })
+                            .on('end', resolve)
+                            .on('error', err => {
+                                console.error('CSV parsing error:', err.message);
+                                reject(new Error(`Failed to parse CSV: ${err.message}`));
+                            });
                     });
-            });
+                }
+            }
         } catch (err) {
             console.error('Error fetching or parsing CSV:', err.message);
             throw new Error(`Unable to fetch or parse CSV from ${csvUrl}: ${err.message}`);
         }
 
-        // Merge new activities with existing ones
+        // Merge new activities with existing ones, keeping only unique activity_id
         const activityMap = new Map();
+        const existingActivityIds = new Set(existingActivities.map(a => a.activity_id));
 
         // Add existing activities to map
         existingActivities.forEach(activity => {
             activityMap.set(activity.activity_id, activity);
         });
 
-        // Update or append new activities
+        // Add only new activities with unique activity_id
         real_activity.forEach(activity => {
-            activityMap.set(activity.activity_id, activity);
+            if (!existingActivityIds.has(activity.activity_id)) {
+                activityMap.set(activity.activity_id, activity);
+            }
         });
 
         // Convert map to array
