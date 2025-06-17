@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import csvParser from 'csv-parser'; // Correct import name
 import cors from 'cors';
 import fetch from 'node-fetch';
+import https from 'https';
 import { Readable } from 'stream';
 
 // Setup App
