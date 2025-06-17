@@ -851,24 +851,23 @@ app.get('/strava', async (req, res) => {
             throw new Error(`Unable to fetch or parse CSV from ${csvUrl}: ${err.message}`);
         }
 
-        // Merge new activities with existing ones, keeping only unique activity_id
-        const activityMap = new Map();
-        const existingActivityIds = new Set(existingActivities.map(a => a.activity_id));
+        // Pastikan semua ID di-set sebagai string untuk konsistensi
+        const existingActivityIds = new Set(existingActivities.map(a => String(a.activity_id)));
 
-        // Add existing activities to map
-        existingActivities.forEach(activity => {
-            activityMap.set(activity.activity_id, activity);
-        });
+        // Buang duplikat dalam real_activity sendiri (jika ada)
+        const realActivityMap = new Map();
+        for (const activity of real_activity) {
+            const id = String(activity.activity_id);
+            realActivityMap.set(id, activity); // Jika ada duplikat ID, akan ditimpa (keep latest occurrence)
+        }
 
-        // Add only new activities with unique activity_id
-        real_activity.forEach(activity => {
-            if (!existingActivityIds.has(activity.activity_id)) {
-                activityMap.set(activity.activity_id, activity);
-            }
-        });
+        // Ambil hanya yang belum ada di existing
+        const uniqueRealActivities = Array.from(realActivityMap.values()).filter(activity =>
+            !existingActivityIds.has(String(activity.activity_id))
+        );
 
-        // Convert map to array
-        const mergedActivities = Array.from(activityMap.values());
+        // Gabungkan semuanya tanpa duplikat
+        const mergedActivities = [...existingActivities, ...uniqueRealActivities];
 
         // Convert merged activities to CSV for client response
         const csv = csvToJson(mergedActivities, {
