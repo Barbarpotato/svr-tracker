@@ -21,12 +21,15 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
     "csv-parser": "^3.2.0",
+    "csv-stringify": "^6.5.2",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
     "https": "^1.0.0",
-    "json2csv": "^6.0.0-alpha.2"
+    "json2csv": "^6.0.0-alpha.2",
+    "node-fetch": "^3.3.2"
   }
 }

@@ -1,13 +1,13 @@
 // Core
 import express from 'express';
-import { parse } from 'json2csv';
+import { parse as csvToJson } from 'json2csv';
 import { format } from 'date-fns';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
-import https from 'https';
-import csv from 'csv-parser';
+import csvParser from 'csv-parser'; // Correct import name
 import cors from 'cors';
-
+import fetch from 'node-fetch';
+import { Readable } from 'stream';
 
 // Setup App
 const app = express();
@@ -442,65 +442,263 @@ const groupMember = {
 }
 
 
+const tournament_table = [
+    {
+        title: "Quarter Final",
+        start: "2025-06-16",
+        end: "2025-06-17",
+        matchlist: [
+            // Upper Bracket
+            [groupMember["MAUNG"], groupMember["SuHu"]],
+            [groupMember["The Munazt"], groupMember["Tupai Terbang"]],
+            [groupMember["Teman Lari Sore"], groupMember["Lari Kalo Ingat"]],
+            [groupMember["Anti Lari Kosong"], groupMember["The Rising Star"]],
 
-app.get('/download-csv', async (req, res) => {
+            // Lower Bracket
+            [groupMember["BEYOND LIMITS"], groupMember["KOPI"]],
+            [groupMember["Satgas Lari"], groupMember["PS (Pelari Santai)"]],
+            [groupMember["Lari Sprint"], groupMember["VMA3"]],
+            [groupMember["Kanvas Lari"], groupMember["Grup Lari Gak Jelas"]]
+        ]
+    },
+    {
+        title: "Semi Final",
+        start: "2025-06-20",
+        end: "2025-06-21",
+        matchlist: []
+    },
+    {
+        title: "Final",
+        start: "2025-06-24",
+        end: "2025-06-26",
+        matchlist: []
+    }
+];
+
+
+app.get('/tournament-matches', async (req, res) => {
     try {
-        const activities = []; // Store activities
+        // Buat peta ID atlet untuk pencarian
+        const athleteIdMap = data.reduce((map, athlete) => {
+            map[athlete.name.toLowerCase()] = {
+                id: athlete.strava_url.split('/').pop(),
+                name: athlete.name
+            };
+            return map;
+        }, {});
 
-        const fetchPromises = data.map(async (athlete) => {
-            const response = await fetch(athlete.strava_url);
-            const pageData = await response.text(); // Rename data to pageData to avoid shadowing
+        // Proses setiap fase turnamen
+        const phaseResults = [];
+        let previousWinners = [];
+        for (const phase of tournament_table) {
+            const phaseDates = getPhaseDates(phase.start, phase.end);
+            const activitiesByDate = {};
 
-            const regex = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s;
-            const match = pageData.match(regex);
+            // Ambil dan parse CSV untuk setiap tanggal di fase
+            let hasValidData = false;
+            for (const date of phaseDates) {
+                const csvUrl = `https://itstaging.samamajuprima.co.id/SVR_${date}.csv`;
+                const results = [];
 
-            if (match) {
                 try {
-                    const jsonData = JSON.parse(match[1].trim());
-                    const athleteData = jsonData.props.pageProps.athleteData;
-
-                    let date = new Date();
-                    date.setDate(date.getDate() + 1);
-                    date = format(date, "MMMM d, yyyy");
-
-                    // Filter activities for today
-                    const filteredActivities = athleteData.recentActivities?.filter(activity => activity.startDateLocal === "Today" || activity.startDateLocal === date);
-
-                    // Add additional properties to filtered activities
-                    if (filteredActivities?.length) {
-                        const activitiesList = filteredActivities.map((activity) => ({
-                            name: athlete.name,
-                            distance: activity.distance,
-                            elevation: activity.elevation,
-                            moving_time: activity.movingTime,
-                            type: activity.type,
-                            link: `https://www.strava.com/activities/${activity.id}`
-                        }));
-
-                        activities.push(...activitiesList);
+                    const response = await fetch(csvUrl);
+                    if (response.status !== 200) {
+                        console.log(`CSV for ${date} not found (HTTP ${response.status}), skipping`);
+                        continue;
                     }
-                } catch (error) {
-                    console.error(`Error parsing JSON for ${athlete.name}:`, error);
+                    const text = await response.text();
+                    if (!text) {
+                        console.log(`CSV for ${date} is empty, skipping`);
+                        continue;
+                    }
+
+                    // Parse CSV
+                    await new Promise((resolve, reject) => {
+                        const bufferStream = Readable.from(text);
+                        bufferStream
+                            .pipe(csvParser())
+                            .on('data', (row) => {
+                                // Validasi dan format ulang kolom tanggal (misalnya, 16/06/2025 ke 2025-06-16)
+                                let rowDate = row.date;
+                                if (rowDate && rowDate.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                                    const [day, month, year] = rowDate.split('/');
+                                    rowDate = `${year}-${month}-${day}`;
+                                }
+                                if (rowDate && /^\d{4}-\d{2}-\d{2}$/.test(rowDate) && rowDate === date) {
+                                    // Bersihkan dan ubah jarak ke angka
+                                    if (row.distance && typeof row.distance === 'string') {
+                                        row.distance = parseFloat(row.distance.replace(',', '.'));
+                                        // Abaikan baris dengan jarak ≤ 3 km
+                                        if (row.distance <= 3) {
+                                            return;
+                                        }
+                                        // Batasi jarak pada 15 km untuk baris > 15 km
+                                        if (row.distance > 15) {
+                                            row.distance = 15;
+                                        }
+                                    }
+                                    results.push(row);
+                                }
+                            })
+                            .on('end', resolve)
+                            .on('error', err => {
+                                console.error(`CSV parsing error for ${date}:`, err.message);
+                                reject(new Error(`Failed to parse CSV for ${date}: ${err.message}`));
+                            });
+                    });
+
+                    // Agregasi jarak berdasarkan nama atlet
+                    const aggregatedResults = {};
+                    results.forEach(row => {
+                        const name = row.name.toLowerCase();
+                        if (!aggregatedResults[name]) {
+                            aggregatedResults[name] = {
+                                name: row.name,
+                                id: athleteIdMap[name]?.id,
+                                distance: 0
+                            };
+                        }
+                        aggregatedResults[name].distance += row.distance || 0;
+                    });
+
+                    // Terapkan batas 15 km pada jarak agregasi
+                    Object.values(aggregatedResults).forEach(athlete => {
+                        if (athlete.distance > 15) {
+                            athlete.distance = 15;
+                        }
+                    });
+
+                    activitiesByDate[date] = Object.values(aggregatedResults);
+                    hasValidData = true;
+                } catch (err) {
+                    console.log(`Error processing CSV for ${date}: ${err.message}, skipping`);
+                    continue;
                 }
-            } else {
-                console.log(`Script tag not found for ${athlete.name}!`);
             }
-        });
 
-        await Promise.all(fetchPromises);
+            // Lewati fase jika tidak ada data valid
+            if (!hasValidData) {
+                console.log(`No valid CSV data for ${phase.title}, skipping phase`);
+                continue;
+            }
 
-        // Convert to CSV
-        const csv = parse(activities);
+            // Proses pertandingan untuk fase
+            const matches = (phase.title === 'Quarter Final' ? phase.matchlist : computeNextPhaseMatches(previousWinners)).map(([group1Ids, group2Ids], index) => {
+                const group1Name = Object.keys(groupMember).find(key => groupMember[key] === group1Ids);
+                const group2Name = Object.keys(groupMember).find(key => groupMember[key] === group2Ids);
+                if (!group1Name || !group2Name) {
+                    throw new Error(`Group names not found for match ${index + 1} in ${phase.title}`);
+                }
 
-        // Set CSV headers for download
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
-        res.status(200).send(csv);
+                const group1MemberCount = group1Ids.length;
+                const group2MemberCount = group2Ids.length;
+
+                // Hitung rata-rata jarak untuk setiap tanggal di fase
+                const distances = {};
+                for (const date of phaseDates) {
+                    const activities = activitiesByDate[date] || [];
+
+                    // Grup 1
+                    let group1TotalDistance = 0;
+                    group1Ids.forEach(id => {
+                        const activity = activities.find(row => {
+                            const athleteInfo = athleteIdMap[row.name.toLowerCase()];
+                            return athleteInfo && athleteInfo.id === id;
+                        });
+                        group1TotalDistance += (activity && !isNaN(activity.distance)) ? activity.distance : 0;
+                    });
+                    const group1Average = group1MemberCount > 0 ? (group1TotalDistance / group1MemberCount).toFixed(2) : '0.00';
+
+                    // Grup 2
+                    let group2TotalDistance = 0;
+                    group2Ids.forEach(id => {
+                        const activity = activities.find(row => {
+                            const athleteInfo = athleteIdMap[row.name.toLowerCase()];
+                            return athleteInfo && athleteInfo.id === id;
+                        });
+                        group2TotalDistance += (activity && !isNaN(activity.distance)) ? activity.distance : 0;
+                    });
+                    const group2Average = group2MemberCount > 0 ? (group2TotalDistance / group2MemberCount).toFixed(2) : '0.00';
+
+                    distances[date] = {
+                        [group1Name]: group1Average,
+                        [group2Name]: group2Average
+                    };
+                }
+
+                // Hitung total jarak akhir
+                const group1Total = phaseDates.reduce((sum, date) => {
+                    return sum + parseFloat(distances[date]?.[group1Name] || 0);
+                }, 0).toFixed(2);
+                const group2Total = phaseDates.reduce((sum, date) => {
+                    return sum + parseFloat(distances[date]?.[group2Name] || 0);
+                }, 0).toFixed(2);
+
+                // Tentukan pemenang
+                const winner = parseFloat(group1Total) > parseFloat(group2Total) ? group1Name :
+                    parseFloat(group2Total) > parseFloat(group1Total) ? group2Name : 'Tie';
+
+                return {
+                    match: `${group1Name} vs ${group2Name}`,
+                    distances,
+                    totalDistance: {
+                        [group1Name]: group1Total,
+                        [group2Name]: group2Total
+                    },
+                    winner
+                };
+            });
+
+            // Simpan pemenang untuk fase berikutnya
+            previousWinners = matches
+                .filter(match => match.winner !== 'Tie')
+                .map(match => {
+                    const [group1Name] = match.match.split(' vs ');
+                    return match.winner === group1Name ? groupMember[group1Name] : groupMember[match.winner];
+                });
+
+            phaseResults.push({
+                title: phase.title,
+                start: phase.start,
+                end: phase.end,
+                matches
+            });
+        }
+
+        if (!phaseResults.length) {
+            return res.status(200).json({ message: 'No tournament phases with valid CSV data found' });
+        }
+
+        res.json(phaseResults);
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Error generating CSV');
+        console.error('Tournament matches error:', err.message);
+        res.status(500).json({ error: `Error processing tournament matches: ${err.message}` });
     }
 });
+
+// Helper untuk menghasilkan tanggal dalam rentang fase
+function getPhaseDates(start, end) {
+    const dates = [];
+    let current = new Date(start);
+    const endDate = new Date(end);
+    while (current <= endDate) {
+        dates.push(current.toLocaleDateString('en-CA'));
+        current.setDate(current.getDate() + 1);
+    }
+    return dates;
+}
+
+// Helper untuk menghitung pertandingan fase berikutnya berdasarkan pemenang sebelumnya
+function computeNextPhaseMatches(winners) {
+    if (winners.length < 2) return [];
+    const matches = [];
+    for (let i = 0; i < winners.length; i += 2) {
+        if (winners[i + 1]) {
+            matches.push([winners[i], winners[i + 1]]);
+        }
+    }
+    return matches;
+}
 
 
 app.get('/strava', async (req, res) => {
@@ -590,47 +788,45 @@ app.get('/strava', async (req, res) => {
         // Fetch existing CSV from itstaging server
         let existingActivities = [];
         try {
-            const response = await new Promise((resolve, reject) => {
-                https.get(csvUrl, (res) => {
-                    let data = '';
-                    res.on('data', chunk => data += chunk);
-                    res.on('end', () => resolve({ status: res.statusCode, data }));
-                    res.on('error', reject);
-                }).on('error', () => resolve({ status: 404, data: '' })); // Handle 404 as non-existent file
-            });
-
-            if (response.status === 200 && response.data) {
-                // Parse existing CSV
-                await new Promise((resolve, reject) => {
-                    const stream = require('stream');
-                    const bufferStream = new stream.PassThrough();
-                    bufferStream.end(response.data);
-                    bufferStream
-                        .pipe(csv())
-                        .on('data', (row) => {
-                            existingActivities.push({
-                                activity_id: row.activity_id,
-                                id: row.id,
-                                date: row.date,
-                                name: row.name,
-                                distance: row.distance,
-                                elevation: row.elevation,
-                                moving_time: row.moving_time,
-                                type: row.type,
-                                link: row.link,
-                                images: row.images
-                            });
-                        })
-                        .on('end', resolve)
-                        .on('error', reject);
-                });
+            const response = await fetch(csvUrl);
+            if (response.status !== 200) {
+                throw new Error(`Failed to fetch CSV: HTTP status ${response.status}`);
             }
+            const text = await response.text();
+            if (!text) {
+                throw new Error('CSV file is empty');
+            }
+            // Parse existing CSV
+            await new Promise((resolve, reject) => {
+                const bufferStream = Readable.from(text);
+                bufferStream
+                    .pipe(csvParser())
+                    .on('data', (row) => {
+                        existingActivities.push({
+                            activity_id: row.activity_id,
+                            id: row.id,
+                            date: row.date,
+                            name: row.name,
+                            distance: row.distance,
+                            elevation: row.elevation,
+                            moving_time: row.moving_time,
+                            type: row.type,
+                            link: row.link,
+                            images: row.images
+                        });
+                    })
+                    .on('end', resolve)
+                    .on('error', err => {
+                        console.error('CSV parsing error:', err.message);
+                        reject(new Error(`Failed to parse CSV: ${err.message}`));
+                    });
+            });
         } catch (err) {
-            console.error('Error fetching existing CSV:', err.message);
-            // Proceed with empty existingActivities if fetch fails
+            console.error('Error fetching or parsing CSV:', err.message);
+            throw new Error(`Unable to fetch or parse CSV from ${csvUrl}: ${err.message}`);
         }
 
-        // Merge new activities with existing ones for server-side update
+        // Merge new activities with existing ones
         const activityMap = new Map();
 
         // Add existing activities to map
@@ -643,58 +839,21 @@ app.get('/strava', async (req, res) => {
             activityMap.set(activity.activity_id, activity);
         });
 
-        // Convert map to array for server-side CSV
+        // Convert map to array
         const mergedActivities = Array.from(activityMap.values());
 
-        // Convert merged activities to CSV for server upload
-        const mergedCsv = parse(mergedActivities, {
+        // Convert merged activities to CSV for client response
+        const csv = csvToJson(mergedActivities, {
             fields: ['activity_id', 'id', 'date', 'name', 'distance', 'elevation', 'moving_time', 'type', 'link', 'images']
         });
 
-        // Upload merged CSV to itstaging server (placeholder for PUT request)
-        try {
-            await new Promise((resolve, reject) => {
-                const req = https.request(
-                    {
-                        method: 'PUT',
-                        hostname: 'itstaging.samamajuprima.co.id',
-                        path: `/SVR_${today}.csv`,
-                        headers: {
-                            'Content-Type': 'text/csv',
-                            'Content-Length': Buffer.byteLength(mergedCsv)
-                        }
-                    },
-                    (res) => {
-                        let data = '';
-                        res.on('data', chunk => data += chunk);
-                        res.on('end', () => {
-                            if (res.statusCode >= 200 && res.statusCode < 300) {
-                                resolve();
-                            } else {
-                                reject(new Error(`Failed to upload CSV: ${res.statusCode} ${data}`));
-                            }
-                        });
-                    }
-                );
-                req.on('error', reject);
-                req.write(mergedCsv);
-                req.end();
-            });
-        } catch (err) {
-            console.error('Error uploading CSV:', err.message);
-            // Proceed to send client response even if upload fails
-        }
-
-        // Convert new activities to CSV for client response
-        const csv = parse(real_activity);
-
-        // Send new activities as CSV to client
+        // Send merged activities as CSV to client
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="SVR_${today}.csv"`);
         res.status(200).send(csv);
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Error fetching data');
+        console.error('Main error:', err.message);
+        res.status(500).send(`Error processing request: ${err.message}`);
     }
 });
 
