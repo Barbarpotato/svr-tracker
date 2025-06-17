@@ -4,152 +4,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SVR 5.0 Tournament Bracket</title>
-    <!-- Bootstrap CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>SVR Tournament Matches Dashboard</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background-color: #8B0000;
-            /* Merah tua */
-            color: #fff;
-            font-family: Arial, sans-serif;
-            padding: 20px;
+            background-color: #f8f9fa;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .match-card {
+            margin-bottom: 1.5rem;
         }
 
         .header {
-            text-align: center;
-            margin-bottom: 30px;
+            background-color: #343a40;
+            color: white;
+            padding: 1rem;
+            margin-bottom: 2rem;
         }
 
-        .header h1 {
-            font-size: 2.5rem;
-            color: #FFD700;
-            /* Kuning */
-            text-shadow: 2px 2px 4px #000;
+        .match-header {
+            background-color: #007bff;
+            color: white;
         }
 
-        .header .sun {
-            font-size: 3rem;
-            color: #FFA500;
-            /* Oranye untuk matahari */
+        .match-pair {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
         }
 
-        #tournament-bracket {
-            margin-top: 20px;
-        }
-
-        .bracket-team {
-            padding: 5px;
-            border: 1px solid #FFD700;
+        .group-box {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #007bff;
             border-radius: 5px;
-            margin: 2px 0;
-        }
-
-        .leader {
-            font-weight: bold;
-            color: #FFD700;
-            /* Sorotan kuning untuk pemimpin */
+            text-align: center;
+            background-color: #fff;
+            color: #000;
+            margin: 0 5px;
+            min-width: 0;
         }
 
         .winner {
-            color: #32CD32;
+            color: #28a745;
             /* Hijau untuk pemenang */
             font-weight: bold;
+        }
+
+        .distance {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .vs-text {
+            font-weight: bold;
+            color: #343a40;
+            margin: 0 10px;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>SVR 5.0 <span class="sun">☀️</span> Tournament Bracket</h1>
-            <p>Update 17 Juni 2025 10:30 AM WIB</p>
+    <header class="header text-center">
+        <h1>SVR Tournament Matches Dashboard</h1>
+        <div class="d-flex justify-content-center align-items-center mt-3">
+            <label for="dateInput" class="me-2">Select Date Range:</label>
+            <input type="date" id="dateInput" class="form-control" style="width: auto;" value="2025-06-16">
+            <input type="date" id="dateInputEnd" class="form-control ms-2" style="width: auto;" value="2025-06-17">
+            <button id="fetchDataBtn" class="btn btn-primary ms-2">Fetch Data</button>
         </div>
-        <div id="tournament-bracket"></div>
+    </header>
+    <div class="container">
+        <div id="matchesContainer" class="row"></div>
+        <div id="loading" class="text-center d-none">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+        <div id="error" class="alert alert-danger d-none" role="alert"></div>
     </div>
 
-    <!-- jQuery CDN -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Bracket Plugin (Unduh dari https://www.jqueryscript.net/chart-graph/jQuery-Plugin-For-Customizable-Tournament-Brackets-Bracket.html) -->
-    <script src="path/to/jquery.bracket.min.js"></script>
-    <!-- Bootstrap JS and Popper.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <!-- Bootstrap 5 JS and Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"></script>
     <script>
-        // Fungsi untuk mengonversi data JSON ke format Bracket plugin
-        function convertToBracketData(data) {
-            const bracketData = [];
-            if (!data || data.length === 0) return bracketData;
+        const dateInput = document.getElementById('dateInput');
+        const dateInputEnd = document.getElementById('dateInputEnd');
+        const fetchDataBtn = document.getElementById('fetchDataBtn');
+        const matchesContainer = document.getElementById('matchesContainer');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
 
-            data.forEach(phase => {
-                const roundData = [];
-                phase.matches.forEach((match, index) => {
-                    const [team1, team2] = match.match.split(' vs ');
-                    const team1Score = match.totalDistance[team1];
-                    const team2Score = match.totalDistance[team2];
-                    const winner = match.winner;
-
-                    roundData.push({
-                        teams: [
-                            `<span class="bracket-team">${team1} (${team1Score} km)${team1Score > team2Score ? ' <span class="leader">(Leading)</span>' : ''}${winner === team1 ? ' <span class="winner">(Winner)</span>' : ''}</span>`,
-                            `<span class="bracket-team">${team2} (${team2Score} km)${team2Score > team1Score ? ' <span class="leader">(Leading)</span>' : ''}${winner === team2 ? ' <span class="winner">(Winner)</span>' : ''}</span>`
-                        ],
-                        score: [team1Score, team2Score]
-                    });
-                });
-
-                bracketData.push({
-                    title: phase.title,
-                    results: roundData
-                });
-            });
-
-            return bracketData;
+        // Function to get today's date as YYYY-MM-DD
+        function getTodayDate() {
+            const today = new Date();
+            return today.toISOString().split('T')[0]; // 2025-06-17
         }
 
-        // Fungsi untuk merender bracket
-        function renderTournament(data) {
-            const bracketData = convertToBracketData(data);
-            if (bracketData.length === 0) {
-                $('#tournament-bracket').html('<p class="text-center">No tournament data available</p>');
-                return;
-            }
-
-            $('#tournament-bracket').bracket({
-                init: bracketData,
-                teamWidth: 200, // Lebar setiap tim
-                scoreWidth: 50, // Lebar skor
-                roundMargin: 20, // Jarak antar ronde
-                matchMargin: 20, // Jarak antar pertandingan
-                centerConnectors: true // Garis penghubung di tengah
-            });
-        }
-
-        // Ambil data dari endpoint
-        async function fetchTournamentData() {
+        // Function to fetch and display data
+        async function fetchData(startDate, endDate) {
             try {
+                // Show loading spinner
+                loading.classList.remove('d-none');
+                error.classList.add('d-none');
+                matchesContainer.innerHTML = '';
+
                 const response = await fetch('https://svr-tracker.vercel.app/tournament-matches');
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
-                if (data.message) {
-                    $('#tournament-bracket').html('<p class="text-center">' + data.message + '</p>');
-                } else {
-                    renderTournament(data);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch data: ${response.statusText}`);
                 }
-            } catch (error) {
-                $('#tournament-bracket').html('<p class="text-center text-danger">Error: ' + error.message + '</p>');
+                const data = await response.json();
+
+                if (data.length === 0 || !data.some(phase => phase.matches.length > 0)) {
+                    throw new Error('No match data available for the selected date range.');
+                }
+
+                // Filter and render matches based on phases
+                data.forEach(phase => {
+                    const phaseMatches = phase.matches;
+                    if (phaseMatches.length > 0) {
+                        const phaseCard = document.createElement('div');
+                        phaseCard.className = 'col-12 match-card';
+                        phaseCard.innerHTML = `
+                            <div class="card shadow">
+                                <div class="card-header match-header">
+                                    <h5 class="mb-0">${phase.title} (${phase.start} - ${phase.end})</h5>
+                                </div>
+                                <div class="card-body">
+                                    ${phaseMatches.map(match => {
+                            const [group1, group2] = match.match.split(' vs ');
+                            const day1 = Object.keys(match.distances)[0];
+                            const day2 = Object.keys(match.distances)[1];
+                            const group1Total = match.totalDistance[group1];
+                            const group2Total = match.totalDistance[group2];
+
+                            // Placeholder member names (replace with actual data if available)
+                            const group1Members = ["Kartika", "Helmi K", "Abdillah", "Rosmini"]; // Example from image
+                            const group2Members = ["Fajar Alamanda", "Ucha", "Hendrawan", "Rahmat W"]; // Example from image
+
+                            return `
+                                            <div class="match-pair">
+                                                <div class="group-box">
+                                                    <h6>${group1Members.join(', ')}</h6>
+                                                    <p class="distance">Total: ${group1Total} km</p>
+                                                    ${match.winner === group1 ? '<p class="winner">Winner 🔥</p>' : ''}
+                                                </div>
+                                                <span class="vs-text">vs</span>
+                                                <div class="group-box">
+                                                    <h6>${group2Members.join(', ')}</h6>
+                                                    <p class="distance">Total: ${group2Total} km</p>
+                                                    ${match.winner === group2 ? '<p class="winner">Winner 🔥</p>' : ''}
+                                                </div>
+                                            </div>
+                                        `;
+                        }).join('')}
+                                </div>
+                            </div>
+                        `;
+                        matchesContainer.appendChild(phaseCard);
+                    }
+                });
+            } catch (err) {
+                error.textContent = err.message;
+                error.classList.remove('d-none');
+            } finally {
+                loading.classList.add('d-none');
             }
         }
 
-        // Panggil fungsi saat halaman dimuat
-        $(document).ready(function () {
-            fetchTournamentData();
+        // Set default date range to today and next day
+        dateInput.value = getTodayDate(); // 2025-06-17
+        dateInputEnd.value = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]; // 2025-06-18
+
+        // Event listener for fetch button
+        fetchDataBtn.addEventListener('click', () => {
+            const startDate = dateInput.value;
+            const endDate = dateInputEnd.value;
+            if (startDate && endDate) {
+                fetchData(startDate, endDate);
+            } else {
+                error.textContent = 'Please select a date range.';
+                error.classList.remove('d-none');
+            }
         });
+
+        // Initial data fetch
+        fetchData(dateInput.value, dateInputEnd.value);
     </script>
 </body>
 

@@ -443,7 +443,6 @@ const groupMember = {
     ]
 }
 
-
 const tournament_table = [
     {
         title: "Quarter Final",
@@ -595,13 +594,20 @@ app.get('/tournament-matches', async (req, res) => {
                 const group1MemberCount = group1Ids.length;
                 const group2MemberCount = group2Ids.length;
 
-                // Hitung rata-rata jarak untuk setiap tanggal di fase
-                const distances = {};
+                // Inisialisasi members dengan semua anggota dari groupMember
                 const members = {
-                    [group1Name]: [],
-                    [group2Name]: []
+                    [group1Name]: group1Ids.map(id => {
+                        const athlete = data.find(a => a.strava_url.endsWith(id));
+                        return { name: athlete ? athlete.name : 'Unknown', id: id, distance: 0 };
+                    }),
+                    [group2Name]: group2Ids.map(id => {
+                        const athlete = data.find(a => a.strava_url.endsWith(id));
+                        return { name: athlete ? athlete.name : 'Unknown', id: id, distance: 0 };
+                    })
                 };
 
+                // Hitung rata-rata jarak untuk setiap tanggal di fase
+                const distances = {};
                 for (const date of phaseDates) {
                     const activities = activitiesByDate[date] || [];
 
@@ -612,11 +618,10 @@ app.get('/tournament-matches', async (req, res) => {
                             const athleteInfo = athleteIdMap[row.name.toLowerCase()];
                             return athleteInfo && athleteInfo.id === id;
                         });
-                        if (activity) {
-                            group1TotalDistance += (activity.distance || 0);
-                            if (!members[group1Name].some(m => m.name === activity.name)) {
-                                members[group1Name].push({ name: activity.name, id: activity.id });
-                            }
+                        const member = members[group1Name].find(m => m.id === id);
+                        if (activity && member) {
+                            member.distance += activity.distance || 0;
+                            group1TotalDistance += activity.distance || 0;
                         }
                     });
                     const group1Average = group1MemberCount > 0 ? (group1TotalDistance / group1MemberCount).toFixed(2) : '0.00';
@@ -628,11 +633,10 @@ app.get('/tournament-matches', async (req, res) => {
                             const athleteInfo = athleteIdMap[row.name.toLowerCase()];
                             return athleteInfo && athleteInfo.id === id;
                         });
-                        if (activity) {
-                            group2TotalDistance += (activity.distance || 0);
-                            if (!members[group2Name].some(m => m.name === activity.name)) {
-                                members[group2Name].push({ name: activity.name, id: activity.id });
-                            }
+                        const member = members[group2Name].find(m => m.id === id);
+                        if (activity && member) {
+                            member.distance += activity.distance || 0;
+                            group2TotalDistance += activity.distance || 0;
                         }
                     });
                     const group2Average = group2MemberCount > 0 ? (group2TotalDistance / group2MemberCount).toFixed(2) : '0.00';
@@ -662,7 +666,7 @@ app.get('/tournament-matches', async (req, res) => {
                         [group1Name]: group1Total,
                         [group2Name]: group2Total
                     },
-                    members: members, // Tambahkan daftar anggota
+                    members: members, // Daftar anggota lengkap dengan jarak
                     winner
                 };
             });
