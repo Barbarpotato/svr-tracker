@@ -466,7 +466,16 @@ const tournament_table = [
         title: "Semi Final",
         start: "2025-06-20",
         end: "2025-06-21",
-        matchlist: []
+        matchlist: [
+
+            // upper bracket
+            [groupMember["MAUNG"], groupMember["The Munazt"]],
+            [groupMember["Anti Lari Kosong"], groupMember["Teman Lari Sore"]],
+
+            // lower bracket
+            [groupMember["BEYOND LIMITS"], groupMember["Pelari Santai"]],
+            [groupMember["VMA3"], groupMember["Grup Lari Gak Jelas"]]
+        ]
     },
     {
         title: "Final",
@@ -751,7 +760,7 @@ app.get('/strava', async (req, res) => {
             const athleteid = athleteData.athlete.id;
 
             return (athleteData.recentActivities || [])
-                .filter(activity => activity.startDateLocal === 'Today' || activity.startDateLocal === tomorrow)
+                .filter(activity => activity.startDateLocal === 'Today' || activity.startDateLocal === tomorrow || activity.startDateLocal === "Yesterday")
                 .map(activity => ({
                     id: athleteid,
                     activity_id: activity.id,
