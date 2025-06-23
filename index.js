@@ -429,7 +429,13 @@ const tournament_table = [
 		title: "Final",
 		start: "2025-06-24",
 		end: "2025-06-26",
-		matchlist: [],
+		matchlist: [
+			// upper bracket
+			[groupMember["MAUNG"], groupMember["Lari Kalo Ingat"]],
+
+			// lower bracket
+			[groupMember["Pelari Santai"], groupMember["VMA3"]],
+		],
 	},
 ];
 
