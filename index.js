@@ -509,8 +509,8 @@ app.get("/tournament-matches", async (req, res) => {
 										if (row.distance <= 3) {
 											return;
 										}
-										if (row.distance > 15) {
-											row.distance = 15;
+										if (row.distance > 12) {
+											row.distance = 12;
 										}
 									}
 									// Konversi moving_time (HH:mm:ss atau mm:ss) ke detik
@@ -574,10 +574,10 @@ app.get("/tournament-matches", async (req, res) => {
 							row.moving_time_seconds || 0;
 					});
 
-					// Terapkan batas 15 km pada jarak agregasi
+					// Terapkan batas 12 km pada jarak agregasi
 					Object.values(aggregatedResults).forEach((athlete) => {
-						if (athlete.distance > 15) {
-							athlete.distance = 15;
+						if (athlete.distance > 12) {
+							athlete.distance = 12;
 						}
 					});
 
@@ -613,8 +613,7 @@ app.get("/tournament-matches", async (req, res) => {
 				);
 				if (!group1Name || !group2Name) {
 					throw new Error(
-						`Group names not found for match ${index + 1} in ${
-							phase.title
+						`Group names not found for match ${index + 1} in ${phase.title
 						}`,
 					);
 				}
@@ -678,14 +677,14 @@ app.get("/tournament-matches", async (req, res) => {
 					const group1AverageDistance =
 						group1MemberCount > 0
 							? (group1TotalDistance / group1MemberCount).toFixed(
-									2,
-							  )
+								2,
+							)
 							: "0.00";
 					const group1AverageMovingTime =
 						group1MemberCount > 0
 							? Math.round(
-									group1TotalMovingTime / group1MemberCount,
-							  )
+								group1TotalMovingTime / group1MemberCount,
+							)
 							: 0;
 
 					// Grup 2
@@ -712,14 +711,14 @@ app.get("/tournament-matches", async (req, res) => {
 					const group2AverageDistance =
 						group2MemberCount > 0
 							? (group2TotalDistance / group2MemberCount).toFixed(
-									2,
-							  )
+								2,
+							)
 							: "0.00";
 					const group2AverageMovingTime =
 						group2MemberCount > 0
 							? Math.round(
-									group2TotalMovingTime / group2MemberCount,
-							  )
+								group2TotalMovingTime / group2MemberCount,
+							)
 							: 0;
 
 					distances[date] = {
@@ -778,12 +777,12 @@ app.get("/tournament-matches", async (req, res) => {
 				// Tentukan pemenang berdasarkan jarak
 				const winner =
 					parseFloat(group1TotalDistance) >
-					parseFloat(group2TotalDistance)
+						parseFloat(group2TotalDistance)
 						? group1Name
 						: parseFloat(group2TotalDistance) >
-						  parseFloat(group1TotalDistance)
-						? group2Name
-						: "Tie";
+							parseFloat(group1TotalDistance)
+							? group2Name
+							: "Tie";
 
 				return {
 					match: `${group1Name} vs ${group2Name}`,
