@@ -1148,9 +1148,9 @@ app.get("/read-csv", (req, res) => {
 						if (row.distance <= 3) {
 							return;
 						}
-						// Cap distance at 15 km for rows > 15 km
-						if (row.distance > 15) {
-							row.distance = 15;
+						// Cap distance at 12 km for rows > 12 km
+						if (row.distance > 12) {
+							row.distance = 12;
 						}
 					}
 					results.push(row);
@@ -1171,10 +1171,10 @@ app.get("/read-csv", (req, res) => {
 					aggregatedResults[name].distance += row.distance || 0;
 				});
 
-				// Apply 15 km cap to aggregated distance
+				// Apply 12 km cap to aggregated distance
 				Object.values(aggregatedResults).forEach((athlete) => {
-					if (athlete.distance > 15) {
-						athlete.distance = 15;
+					if (athlete.distance > 12) {
+						athlete.distance = 12;
 					}
 				});
 
