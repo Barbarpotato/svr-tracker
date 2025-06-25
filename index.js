@@ -509,8 +509,8 @@ app.get("/tournament-matches", async (req, res) => {
 										if (row.distance <= 3) {
 											return;
 										}
-										if (row.distance > 12) {
-											row.distance = 12;
+										if (row.distance > 15) {
+											row.distance = 15;
 										}
 									}
 									// Konversi moving_time (HH:mm:ss atau mm:ss) ke detik
@@ -540,6 +540,8 @@ app.get("/tournament-matches", async (req, res) => {
 									} else {
 										row.moving_time_seconds = 0;
 									}
+									// Simpan link jika ada
+									row.link = row.link || "";
 									results.push(row);
 								}
 							})
@@ -557,7 +559,7 @@ app.get("/tournament-matches", async (req, res) => {
 							});
 					});
 
-					// Agregasi jarak dan moving_time berdasarkan nama atlet
+					// Agregasi jarak, moving_time, dan kumpulkan activity_list berdasarkan nama atlet
 					const aggregatedResults = {};
 					results.forEach((row) => {
 						const name = row.name.toLowerCase();
@@ -567,17 +569,27 @@ app.get("/tournament-matches", async (req, res) => {
 								id: athleteIdMap[name]?.id,
 								distance: 0,
 								moving_time_seconds: 0,
+								activity_list: [],
 							};
 						}
 						aggregatedResults[name].distance += row.distance || 0;
 						aggregatedResults[name].moving_time_seconds +=
 							row.moving_time_seconds || 0;
+						// Tambahkan detail aktivitas ke activity_list
+						aggregatedResults[name].activity_list.push({
+							date: date,
+							distance: row.distance || 0,
+							moving_time: formatSecondsToHMS(
+								row.moving_time_seconds || 0,
+							),
+							link: row.link,
+						});
 					});
 
-					// Terapkan batas 12 km pada jarak agregasi
+					// Terapkan batas 15 km pada jarak agregasi
 					Object.values(aggregatedResults).forEach((athlete) => {
-						if (athlete.distance > 12) {
-							athlete.distance = 12;
+						if (athlete.distance > 15) {
+							athlete.distance = 15;
 						}
 					});
 
@@ -632,6 +644,7 @@ app.get("/tournament-matches", async (req, res) => {
 							id: id,
 							distance: 0,
 							moving_time_seconds: 0,
+							activity_list: [],
 						};
 					}),
 					[group2Name]: group2Ids.map((id) => {
@@ -643,6 +656,7 @@ app.get("/tournament-matches", async (req, res) => {
 							id: id,
 							distance: 0,
 							moving_time_seconds: 0,
+							activity_list: [],
 						};
 					}),
 				};
@@ -669,6 +683,12 @@ app.get("/tournament-matches", async (req, res) => {
 							member.distance += activity.distance || 0;
 							member.moving_time_seconds +=
 								activity.moving_time_seconds || 0;
+							// Tambahkan activity_list dari aggregatedResults
+							member.activity_list.push(
+								...activity.activity_list.filter(
+									(act) => act.date === date,
+								),
+							);
 							group1TotalDistance += activity.distance || 0;
 							group1TotalMovingTime +=
 								activity.moving_time_seconds || 0;
@@ -703,6 +723,12 @@ app.get("/tournament-matches", async (req, res) => {
 							member.distance += activity.distance || 0;
 							member.moving_time_seconds +=
 								activity.moving_time_seconds || 0;
+							// Tambahkan activity_list dari aggregatedResults
+							member.activity_list.push(
+								...activity.activity_list.filter(
+									(act) => act.date === date,
+								),
+							);
 							group2TotalDistance += activity.distance || 0;
 							group2TotalMovingTime +=
 								activity.moving_time_seconds || 0;
@@ -760,7 +786,7 @@ app.get("/tournament-matches", async (req, res) => {
 					return sum + parseHMSToSeconds(time);
 				}, 0);
 
-				// Format ulang moving_time anggota ke HH:mm:ss
+				// Format ulang moving_time anggota ke HH:mm:ss dan bersihkan moving_time_seconds
 				members[group1Name].forEach((member) => {
 					member.moving_time = formatSecondsToHMS(
 						member.moving_time_seconds,
